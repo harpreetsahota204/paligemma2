@@ -1,0 +1,156 @@
+{
+    "name": "PaliGemma2 Mix",
+    "url": "https://github.com/harpreetsahota204/paligemma2",
+    "models": [
+        {
+            "base_name": "google/paligemma2-3b-mix-448",
+            "base_filename":"paligemma2-3b-mix-448",
+            "author": "Google DeepMind",
+            "license": "gemma (https://ai.google.dev/gemma/terms)",
+            "source": "https://huggingface.co/google/paligemma2-3b-mix-448",
+            "description": "PaliGemma 2 mix checkpoints are fine-tuned on a diverse set of tasks and are ready to use out of the box. These tasks include short and long captioning, optical character recognition, question answering, object detection and segmentation, and more.",
+            "tags": [
+                "detection",
+                "segmentation",
+                "ocr",
+                "VLM",
+                "zero-shot"
+            ],
+            "date_added": "2025-04-03",
+            "requirements": {
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "cpu": {
+                    "support": true
+                },
+                "gpu": {
+                    "support": true
+                }
+            }
+        },
+        {
+            "base_name": "google/paligemma2-10b-mix-448",
+            "base_filename":"paligemma2-10b-mix-448",
+            "author": "Google DeepMind",
+            "license": "gemma (https://ai.google.dev/gemma/terms)",
+            "source": "https://huggingface.co/google/paligemma2-10b-mix-448",
+            "description": "PaliGemma 2 mix checkpoints are fine-tuned on a diverse set of tasks and are ready to use out of the box. These tasks include short and long captioning, optical character recognition, question answering, object detection and segmentation, and more.",
+            "tags": [
+                "detection",
+                "segmentation",
+                "ocr",
+                "VLM",
+                "zero-shot"
+            ],
+            "date_added": "2025-04-03",
+            "requirements": {
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "cpu": {
+                    "support": true
+                },
+                "gpu": {
+                    "support": true
+                }
+            }
+        },
+        {
+            "base_name": "google/paligemma2-28b-mix-448",
+            "base_filename":"paligemma2-28b-mix-448",
+            "author": "Google DeepMind",
+            "license": "gemma (https://ai.google.dev/gemma/terms)",
+            "source": "https://huggingface.co/google/paligemma2-28b-mix-448",
+            "description": "PaliGemma 2 mix checkpoints are fine-tuned on a diverse set of tasks and are ready to use out of the box. These tasks include short and long captioning, optical character recognition, question answering, object detection and segmentation, and more.",
+            "tags": [
+                "detection",
+                "segmentation",
+                "ocr",
+                "VLM",
+                "zero-shot"
+            ],
+            "date_added": "2025-04-03",
+            "requirements": {
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "cpu": {
+                    "support": true
+                },
+                "gpu": {
+                    "support": true
+                }
+            }
+        },
+        {
+            "base_name": "google/paligemma2-3b-mix-224",
+            "base_filename":"paligemma2-3b-mix-224",
+            "author": "Google DeepMind",
+            "license": "gemma (https://ai.google.dev/gemma/terms)",
+            "source": "https://huggingface.co/google/paligemma2-3b-mix-224",
+            "description": "PaliGemma 2 mix checkpoints are fine-tuned on a diverse set of tasks and are ready to use out of the box. These tasks include short and long captioning, optical character recognition, question answering, object detection and segmentation, and more.",
+            "tags": [
+                "detection",
+                "segmentation",
+                "ocr",
+                "VLM",
+                "zero-shot"
+            ],
+            "date_added": "2025-04-03",
+            "requirements": {
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "cpu": {
+                    "support": true
+                },
+                "gpu": {
+                    "support": true
+                }
+            }
+        },
+        {
+            "base_name": "google/paligemma2-10b-mix-224",
+            "base_filename":"paligemma2-10b-mix-224",
+            "author": "Google DeepMind",
+            "license": "gemma (https://ai.google.dev/gemma/terms)",
+            "source": "https://huggingface.co/google/paligemma2-10b-mix-224",
+            "description": "PaliGemma 2 mix checkpoints are fine-tuned on a diverse set of tasks and are ready to use out of the box. These tasks include short and long captioning, optical character recognition, question answering, object detection and segmentation, and more.",
+            "tags": [
+                "detection",
+                "segmentation",
+                "ocr",
+                "VLM",
+                "zero-shot"
+            ],
+            "date_added": "2025-04-03",
+            "requirements": {
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "cpu": {
+                    "support": true
+                },
+                "gpu": {
+                    "support": true
+                }
+            }
+        },
+        {
+            "base_name": "google/paligemma2-28b-mix-224",
+            "base_filename":"paligemma2-28b-mix-224",
+            "author": "Google DeepMind",
+            "license": "gemma (https://ai.google.dev/gemma/terms)",
+            "source": "https://huggingface.co/google/paligemma2-28b-mix-224",
+            "description": "PaliGemma 2 mix checkpoints are fine-tuned on a diverse set of tasks and are ready to use out of the box. These tasks include short and long captioning, optical character recognition, question answering, object detection and segmentation, and more.",
+            "tags": [
+                "detection",
+                "segmentation",
+                "ocr",
+                "VLM",
+                "zero-shot"
+            ],
+            "date_added": "2025-04-03",
+            "requirements": {
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "cpu": {
+                    "support": true
+                },
+                "gpu": {
+                    "support": true
+                }
+            }
+        }
+   ]
+}
