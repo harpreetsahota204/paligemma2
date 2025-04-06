@@ -6,7 +6,7 @@ from huggingface_hub import snapshot_download
 from fiftyone.operators import types
 
 # Import constants from zoo.py to ensure consistency
-from .zoo import OPERATIONS, PaliGemma2
+from .zoo import PaliGemma2
 
 MODES = {
     "caption": "Caption images", 
