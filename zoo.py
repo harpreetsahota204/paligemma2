@@ -298,16 +298,53 @@ class PaliGemma2(SamplesMixin, Model):
         """Extracts object detections from the model's parsed output and converts them to FiftyOne format.
         
         Args:
-            parsed_answer: Dict containing the parsed model output with bounding boxes and labels
+            parsed_answer: String containing the parsed model output with bounding boxes and labels
+            task: The task prompt used
             image: PIL Image object used to get dimensions for normalizing coordinates
             
         Returns:
-            A FiftyOne Detections object containing the extracted detections, where each detection has:
-            - A label (either from model output or "object_N" if no label provided)
-            - A normalized bounding box in [0,1] coordinates
+            A FiftyOne Detections object containing the extracted detections
         """
-
-        return Detections(detections=dets)
+        # Get image dimensions for normalization
+        image_width, image_height = image.size
+        
+        # Regex pattern to match four <locxxxx> tags and the label
+        loc_pattern = r"<loc(\d{4})><loc(\d{4})><loc(\d{4})><loc(\d{4})>\s+(\w+)"
+        
+        matches = re.findall(loc_pattern, parsed_answer)
+        detections = []
+        
+        for match in matches:
+            try:
+                # First normalize the model output coordinates (0-1024) to pixel space
+                y1 = (float(match[0]) / 1024) * image_height
+                x1 = (float(match[1]) / 1024) * image_width
+                y2 = (float(match[2]) / 1024) * image_height
+                x2 = (float(match[3]) / 1024) * image_width
+                
+                # Get the label
+                label = match[4]
+                
+                # Convert to FiftyOne's normalized [0,1] format
+                x = x1 / image_width
+                y = y1 / image_height
+                w = (x2 - x1) / image_width
+                h = (y2 - y1) / image_height
+                
+                # Create Detection object with normalized coordinates
+                detection = fo.Detection(
+                    label=label,
+                    bounding_box=[x, y, w, h],
+                )
+                detections.append(detection)
+                
+            except Exception as e:
+                # Log any errors processing individual detections but continue
+                logger.debug(f"Error processing detection {match}: {e}")
+                continue
+        
+        logger.info(f"Extracted {len(detections)} detections from model output")
+        return fo.Detections(detections=detections)
     
     def _predict_detection(self, image: Image.Image) -> Detections:
         """Detect objects in an image using the model."""
