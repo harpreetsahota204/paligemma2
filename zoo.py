@@ -185,11 +185,11 @@ class PaliGemma2(SamplesMixin, Model):
         """Generate a caption for the image."""
         logger.info("Starting caption generation...")
         
-        detail_level = self.params.get("detail_level", "basic")
+        detail_level = self.params.get("detail_level", "short")
         logger.info(f"Caption detail level: {detail_level}")
         
         task_mapping = OPERATIONS["caption"]["task_mapping"]
-        task = task_mapping.get(detail_level, task_mapping["basic"])
+        task = task_mapping.get(detail_level, task_mapping["short"])
         logger.info(f"Using task: {task}")
         
         try:
