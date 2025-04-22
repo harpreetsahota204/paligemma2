@@ -61,6 +61,10 @@ class PaliGemma2(SamplesMixin, Model):
         self._operation = operation
         self.prompt = prompt
         
+        # Set initial operation if provided
+        if operation:
+            self.operation = operation  # Use the property setter
+            
         self.device = get_device()
         logger.info(f"Using device: {self.device}")
 
