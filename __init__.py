@@ -8,14 +8,6 @@ from fiftyone.operators import types
 # Import constants from zoo.py to ensure consistency
 from .zoo import OPERATIONS, PaliGemma2
 
-MODES = {
-    "caption": "Caption images", 
-    "query": "Visual question answering",
-    "detect": "Object detection",
-    "point": "Apply point on object",
-    "classify": "Image classification",
-}
-
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +63,7 @@ def resolve_input(self, ctx):
 
         mode_dropdown = types.Dropdown(label="What would you like to use PaliGemma2 Mix for?")
         
-        for k, v in MODES.items():
+        for k, v in OPERATIONS.keys():
             mode_dropdown.add_choice(k, label=v)
 
         inputs.enum(
@@ -99,14 +91,6 @@ def resolve_input(self, ctx):
                 "object_type",
                 label="Detect",
                 description="What do you want to detect?",
-                required=True,
-            )
-
-        if chosen_task == "point":
-            inputs.str(
-                "object_type",
-                label="Point",
-                description="What do you want to place a point on?",
                 required=True,
             )
        
