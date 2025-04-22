@@ -64,7 +64,7 @@ class PaliGemma2(SamplesMixin, Model):
         # Set initial operation if provided
         if operation:
             self.operation = operation  # Use the property setter
-            
+
         self.device = get_device()
         logger.info(f"Using device: {self.device}")
 
@@ -389,7 +389,9 @@ class PaliGemma2(SamplesMixin, Model):
             "caption": self._predict_caption,
             "ocr": self._predict_ocr,
             "detection": self._predict_detection,
-            "segmentation": self._predict_segmentation,
+            "classify": self._predict_classify,
+            "answer": self._predict_answer,
+            # "segmentation": self._predict_segmentation,
         }
         
         predict_method = prediction_methods.get(self.operation)
