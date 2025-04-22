@@ -14,15 +14,6 @@ from fiftyone.core.labels import Detection, Detections, Keypoint, Keypoints, Cla
 from transformers import  PaliGemmaProcessor, PaliGemmaForConditionalGeneration
 
 
-    #     # Question-answering tasks
-    #     "answer": "<image> answer en {prompt}",    # Answer a question
-    #     "question": "<image> question en {prompt}",  # Generate a question
-        
-    #     # Object detection and segmentation
-    #     "detect": ,   # Multiple object detection
-    #     "segment": "<image> segment {prompt}"   # Single object segmentation
-    # }
-
 # Define operation configurations
 OPERATIONS = {
     "caption": {
@@ -37,7 +28,7 @@ OPERATIONS = {
     "detection": "<image> detect",
     "segmentation": "<image> segment",
     "answer": "<image> answer en",
-    "zero-shot-classification": "<image> answer What is this a photo of? Choose from the following: ",
+    "classify": "<image> answer en What is this a photo of? Choose from the following: ",
 }
 
 
@@ -168,7 +159,6 @@ class PaliGemma2(SamplesMixin, Model):
 
         return parsed_answer
 
-
     def _predict_caption(self, image: Image.Image) -> str:
         """Generate a caption for the image."""
         logger.info("Starting caption generation...")
@@ -198,8 +188,7 @@ class PaliGemma2(SamplesMixin, Model):
             image (Image.Image): PIL Image object containing the image to perform OCR on
             
         Returns:
-    
-                - A string containing all detected text (when store_region_info=False)
+          string containing all detected text
         """
         logger.info("Starting OCR text extraction...")
         
@@ -259,7 +248,9 @@ class PaliGemma2(SamplesMixin, Model):
         text_input = f"{task}{self.prompt}\n"
         
         logger.info(f"Sending answer prompt to model")
+
         parsed_answer = self._generate_and_parse(image, task, text_input=text_input)
+
         logger.info(f"Model answered question with: {parsed_answer}")
         
         # Convert the string result to FiftyOne Classifications format
@@ -277,36 +268,24 @@ class PaliGemma2(SamplesMixin, Model):
         Returns:
             fo.Classifications: Classification results
         """
-        task = OPERATIONS["zero-shot-classification"]
+        task = OPERATIONS["classify"]
 
         if not self.prompt:
             raise ValueError("prompt is required for classification")
 
         # Handle different types of prompt inputs (list or string)
-        if isinstance(self.prompt, list):
-            # If prompt is a list, join with semicolons
-            classes_to_find = ';'.join(str(item).strip() for item in self.prompt)
+        if isinstance(self.prompt, list): # If prompt is a list, join with semicolons
+            classes_to_find = ';'.join(str(item).strip() for item in self.prompt
             logger.info(f"Converted list to semicolon-delimited string: {classes_to_find}")
-        else:
-            # If prompt is a string, first try splitting by semicolons
+        else: # If prompt is a string, first try splitting by semicolons
             if ';' in self.prompt:
-                # Clean up whitespace around semicolons
-                classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(';'))
-            # If no semicolons but has commas, replace commas with semicolons
-            elif ',' in self.prompt:
-                # Replace commas and clean up whitespace
+                classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(';')) # Clean up whitespace around semicolons
+            elif ',' in self.prompt: # If no semicolons but has commas, replace commas with semicolons
                 classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(','))
-            # If neither semicolons nor commas, split by spaces and join with semicolons
-            else:
+            else: # If neither semicolons nor commas, split by spaces and join with semicolons
                 classes_to_find = ';'.join(self.prompt.split())
-            
-            logger.info(f"Standardized input to semicolon-delimited format: {classes_to_find}")
 
-        # Convert semicolon-delimited string to comma-space format for the prompt
-        display_classes = classes_to_find.replace(';', ', ')
-        text_input = f"{task}{display_classes}\n"
-        
-        logger.info(f"Sending classification prompt to model")
+        text_input = f"{task}{classes_to_find}\n"
         parsed_answer = self._generate_and_parse(image, task, text_input=text_input)
         logger.info(f"Model classified image as: {parsed_answer}")
         
@@ -314,7 +293,6 @@ class PaliGemma2(SamplesMixin, Model):
         classifications = self._to_classifications(parsed_answer)
         
         return classifications
-
 
     def _extract_detections(self, parsed_answer, task, image):
         """Extracts object detections from the model's parsed output and converts them to FiftyOne format.
@@ -332,30 +310,22 @@ class PaliGemma2(SamplesMixin, Model):
         return Detections(detections=dets)
     
     def _predict_detection(self, image: Image.Image) -> Detections:
-        """Detect objects in an image using the Florence2 model."""
+        """Detect objects in an image using the model."""
         task = OPERATIONS["detection"]
 
         if not self.prompt:
             raise ValueError("prompt is required for detection")
         # Handle different types of prompt inputs (list or string)
-        if isinstance(self.prompt, list):
-            # If prompt is a list, join with semicolons
+        if isinstance(self.prompt, list): 
             classes_to_find = ';'.join(str(item).strip() for item in self.prompt)
             logger.info(f"Converted list to semicolon-delimited string: {classes_to_find}")
         else:
-            # If prompt is a string, first try splitting by semicolons
-            if ';' in self.prompt:
-                # Clean up whitespace around semicolons
-                classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(';'))
-            # If no semicolons but has commas, replace commas with semicolons
-            elif ',' in self.prompt:
-                # Replace commas and clean up whitespace
+            if ';' in self.prompt: # If prompt is a string, first try splitting by semicolons
+                classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(';'))  # Clean up whitespace around semicolons
+            elif ',' in self.prompt:  # If no semicolons but has commas, replace commas with semicolons
                 classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(','))
-            # If neither semicolons nor commas, split by spaces and join with semicolons
-            else:
+            else: # If neither semicolons nor commas, split by spaces and join with semicolons
                 classes_to_find = ';'.join(self.prompt.split())
-            
-            logger.info(f"Standardized input to semicolon-delimited format: {classes_to_find}")
 
         text_input = f"{task} {classes_to_find}\n"
 
@@ -364,7 +334,7 @@ class PaliGemma2(SamplesMixin, Model):
         return self._extract_detections(parsed_answer, task, image)
 
     def _predict(self, image: Image.Image, sample=None) -> Any:
-        """Process a single image with Florence2 model."""
+        """Process a single image with model."""
         # Centralized field handling
         if sample is not None and self._get_field() is not None:
             field_value = sample.get_field(self._get_field())
@@ -390,11 +360,7 @@ class PaliGemma2(SamplesMixin, Model):
         return predict_method(image)
     
     def predict(self, image: np.ndarray, sample=None, **kwargs) -> Any:
-        """Process an image array with Florence2 model."""
-        logger.info("Starting prediction...")
-        logger.info(f"Operation: {self.operation}")
-        logger.info(f"Parameters: {self.params}")
-        
+        """Process an image array with model."""
         try:
             # Convert numpy array to PIL Image
             pil_image = Image.fromarray(image)
