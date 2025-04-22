@@ -61,10 +61,16 @@ class PaliGemma2(SamplesMixin, Model):
         self.model_path = model_path
         self._operation = operation
         self.prompt = prompt
+        self.params = kwargs
         
         # Set initial operation if provided
         if operation:
             self.operation = operation  # Use the property setter
+
+        # Store additional parameters
+        for key, value in kwargs.items():
+            self.params[key] = value
+        
 
         self.device = get_device()
         logger.info(f"Using device: {self.device}")
@@ -119,6 +125,19 @@ class PaliGemma2(SamplesMixin, Model):
         if value not in OPERATIONS:
             raise ValueError(f"Invalid operation: {value}. Must be one of {list(OPERATIONS.keys())}")
         self._operation = value
+
+    @property
+    def detail_level(self):
+        """Get the caption detail level."""
+        return self.params.get("detail_level", "short")
+
+    @detail_level.setter
+    def detail_level(self, value):
+        """Set the caption detail level."""
+        valid_levels = OPERATIONS["caption"]["params"]["detail_level"]
+        if value not in valid_levels:
+            raise ValueError(f"Invalid detail level: {value}. Must be one of {valid_levels}")
+        self.params["detail_level"] = value
 
     def _generate_and_parse(
         self,
