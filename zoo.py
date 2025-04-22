@@ -237,7 +237,7 @@ class PaliGemma2(SamplesMixin, Model):
             fo.Classifications object containing the converted classification annotations
         """
         # First standardize the delimiters - replace commas, periods, and spaces with semicolons
-        standardized = classes.replace(',', ';').replace('.', ';').replace(' ', ';')
+        standardized = classes.replace(',', ';').replace('.', ';')
         
         # Split by semicolon and clean up each label
         class_list = [cls.strip() for cls in standardized.split(';') if cls.strip()]
