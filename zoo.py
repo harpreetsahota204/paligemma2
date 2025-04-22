@@ -195,7 +195,7 @@ class PaliGemma2(SamplesMixin, Model):
         try:
             parsed_answer = self._generate_and_parse(image, task)
             logger.info(f"Parsed answer: {parsed_answer}")
-            caption = parsed_answer[task].strip()  # Add strip() here to remove whitespace
+            caption = parsed_answer.strip()  # Add strip() here to remove whitespace
             return caption
         except Exception as e:
             logger.error(f"Caption generation failed: {str(e)}", exc_info=True)
