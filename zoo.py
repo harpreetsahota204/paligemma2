@@ -54,9 +54,7 @@ class PaliGemma2(SamplesMixin, Model):
         system_prompt: str = None,
         **kwargs
     ):
-        if operation not in OPERATIONS:
-            raise ValueError(f"Invalid operation: {operation}. Must be one of {list(OPERATIONS.keys())}")
-        
+
         self._fields = {}
         
         self.model_path = model_path
