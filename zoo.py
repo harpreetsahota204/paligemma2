@@ -275,7 +275,7 @@ class PaliGemma2(SamplesMixin, Model):
 
         # Handle different types of prompt inputs (list or string)
         if isinstance(self.prompt, list): # If prompt is a list, join with semicolons
-            classes_to_find = ';'.join(str(item).strip() for item in self.prompt
+            classes_to_find = ';'.join(str(item).strip() for item in self.prompt)
             logger.info(f"Converted list to semicolon-delimited string: {classes_to_find}")
         else: # If prompt is a string, first try splitting by semicolons
             if ';' in self.prompt:
