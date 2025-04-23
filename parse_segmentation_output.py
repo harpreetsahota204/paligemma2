@@ -185,22 +185,22 @@ def _get_reconstruct_masks():
     # JIT compile for CPU
     return jax.jit(reconstruct_masks, backend='cpu')
 
-def extract_segmentation(model_output, image_width, image_height):
+def extract_segmentation_masks(model_output, image_width, image_height):
     """
-    Extract bounding boxes and segmentation masks with consistent dimension handling
+    Extract high-quality segmentation masks scaled to the full image size
     
     Args:
-        model_output: Text output from the model containing loc and seg tokens
-        image_width: Width of the input image in pixels (e.g., 1920)
-        image_height: Height of the input image in pixels (e.g., 1080)
+        model_output: Text output from the model containing seg tokens
+        image_width: Width of the input image in pixels
+        image_height: Height of the input image in pixels
         
     Returns:
-        List of dicts with corrected dimension ordering
+        List of 2D binary numpy arrays (one per detected object)
     """
     # Strip leading newlines from model output
     text = model_output.lstrip("\n")
-    # Initialize list to store extracted objects
-    objects = []
+    # Initialize list to store extracted masks
+    masks = []
     
     # Continue processing until we've parsed all the text
     while text:
@@ -215,42 +215,12 @@ def extract_segmentation(model_output, image_width, image_height):
         # Extract text before the match
         before = gs.pop(0)
         
-        # Extract and remove the label (if it exists)
-        label = gs.pop() if len(gs) > 20 else None
-        
-        # Important: Verify the order of bounding box coordinates
-        # Original order is stated as [y1, x1, y2, x2] - let's verify this is correct
-        # and not swapped
-        y1, x1, y2, x2 = [float(int(x) / 1024) for x in gs[:4]]
-        
-        # Ensure values are in valid range
-        x1 = max(0.0, min(1.0, x1))
-        y1 = max(0.0, min(1.0, y1))
-        x2 = max(0.0, min(1.0, x2))
-        y2 = max(0.0, min(1.0, y2))
-        
-        # Convert to FiftyOne format [x, y, width, height] (normalized)
-        bbox_x = x1
-        bbox_y = y1
-        bbox_width = x2 - x1
-        bbox_height = y2 - y1
-        
-        # Get absolute pixel coordinates for mask processing
-        x1_px = int(round(x1 * image_width))
-        y1_px = int(round(y1 * image_height))
-        box_width_px = int(round(bbox_width * image_width))
-        box_height_px = int(round(bbox_height * image_height))
-        
-        # Print these values for debugging
-        # print(f"Bbox (normalized): x={bbox_x}, y={bbox_y}, w={bbox_width}, h={bbox_height}")
-        # print(f"Bbox (pixels): x1={x1_px}, y1={y1_px}, w={box_width_px}, h={box_height_px}")
-        
-        # Extract the 16 segmentation indices
+        # Extract the 16 segmentation indices (they start at index 4)
         seg_indices = gs[4:20]
         
         # Process segmentation mask if available
-        if seg_indices[0] is None or box_width_px <= 0 or box_height_px <= 0:
-            # No segmentation data available or invalid box
+        if seg_indices[0] is None:
+            # No segmentation data available, skip this entry
             mask = None
         else:
             try:
@@ -263,60 +233,26 @@ def extract_segmentation(model_output, image_width, image_height):
                 # Normalize to [0, 1] range
                 m64 = np.clip(np.array(m64) * 0.5 + 0.5, 0, 1)
                 
-                # Create a mask with correct dimensions (height, width) for NumPy
-                mask = np.zeros((image_height, image_width), dtype=np.uint8)
-                
-                # This is the key part - in PIL, the resize function takes (width, height)
-                # Convert base mask to a PIL image for processing
+                # Convert base mask to a PIL image for high-quality scaling
                 pil_mask = PIL.Image.fromarray((m64 * 255).astype(np.uint8))
                 
-                # IMPORTANT: PIL.resize takes (width, height) - this is the opposite of NumPy!
-                if box_width_px > 0 and box_height_px > 0:
-                    # Verify we're using the right order for PIL resize
-                    # For PIL: resize((width, height))
-                    resized_mask = pil_mask.resize((box_width_px, box_height_px), PIL.Image.LANCZOS)
-                    
-                    # Convert to numpy array - now with shape (height, width)
-                    resized_array = np.array(resized_mask)
-                    
-                    # Debug: Print the shape of the resized array
-                    # print(f"Resized mask shape: {resized_array.shape}, Expected: ({box_height_px}, {box_width_px})")
-                    
-                    # Calculate safe placement bounds
-                    x2_px = min(x1_px + box_width_px, image_width)
-                    y2_px = min(y1_px + box_height_px, image_height)
-                    
-                    # Calculate dimensions to avoid array bounds errors
-                    place_width = x2_px - x1_px
-                    place_height = y2_px - y1_px
-                    
-                    if place_width > 0 and place_height > 0:
-                        # If resized_array dimensions exceed placement area, crop it
-                        # IMPORTANT: NumPy array access is [height, width] or [y, x]
-                        if resized_array.shape[0] > place_height or resized_array.shape[1] > place_width:
-                            crop_array = resized_array[:place_height, :place_width]
-                        else:
-                            crop_array = resized_array
-                        
-                        # Place the mask using NumPy's [y, x] indexing
-                        # Note: The crop_array should match the placement area exactly now
-                        mask[y1_px:y2_px, x1_px:x2_px] = (crop_array > 127).astype(np.uint8)
+                # Scale the mask to the full image size using LANCZOS for high quality
+                # PIL.resize takes (width, height)
+                scaled_mask = pil_mask.resize((image_width, image_height), PIL.Image.LANCZOS)
                 
-                # Verify mask shape for safety
-                assert mask.shape == (image_height, image_width), f"Mask shape {mask.shape} does not match image {(image_height, image_width)}"
+                # Convert to binary numpy array (0 and 1 values)
+                mask = (np.array(scaled_mask) > 127).astype(np.int32)
                 
             except Exception as e:
                 print(f"Error creating mask: {e}")
                 mask = None
         
-        # Add to results
-        objects.append({
-            'bbox': [bbox_x, bbox_y, bbox_width, bbox_height],  # FiftyOne format [x, y, width, height]
-            'mask': mask  # Complete image-sized mask with shape (height, width)
-        })
+        # Add mask to results if valid
+        if mask is not None:
+            masks.append(mask)
         
         # Move past the processed content
         content = m.group()
         text = text[len(before) + len(content):]
     
-    return objects
+    return masks
