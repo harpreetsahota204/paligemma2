@@ -305,8 +305,8 @@ class PaliGemma2(SamplesMixin, Model):
                 classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(';')) # Clean up whitespace around semicolons
             elif ',' in self.prompt: # If no semicolons but has commas, replace commas with semicolons
                 classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(','))
-            else: # If neither semicolons nor commas, split by spaces and join with semicolons
-                classes_to_find = ';'.join(self.prompt.split())
+            else: # If neither semicolons nor commas, use as-is
+                classes_to_find = self.prompt.strip()
 
         text_input = f"{task}{classes_to_find}\n"
         parsed_answer = self._generate_and_parse(image, task, text_input=text_input)
@@ -446,9 +446,9 @@ class PaliGemma2(SamplesMixin, Model):
             elif ',' in self.prompt:
                 classes_to_find = [cls.strip() for cls in self.prompt.split(',')]
             else:
-                classes_to_find = [cls.strip() for cls in self.prompt.split()]
+                # Single class case - use whole string as one class
+                classes_to_find = [self.prompt.strip()]
             logger.info(f"Parsed classes from string: {classes_to_find}")
-        
         # Initialize an empty list to store all segmentations across all classes
         all_segmentations = []
         
