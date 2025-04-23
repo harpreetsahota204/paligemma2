@@ -14,7 +14,7 @@ from fiftyone.core.labels import Detection, Detections, Classification, Classifi
 
 from transformers import  PaliGemmaProcessor, PaliGemmaForConditionalGeneration
 
-from .parse_segmentation_output import extract_objects
+from .parse_segmentation_output import extract_segmentation
 
 # Define operation configurations
 OPERATIONS = {
@@ -28,7 +28,7 @@ OPERATIONS = {
     },
     "ocr": "<image> ocr\n",
     "detection": "<image> detect",
-    "segmentation": "<image> segment",
+    "segment": "<image> segment",
     "answer": "<image> answer en",
     "classify": "<image> answer en What is this a photo of? Choose from the following: ",
 }
@@ -392,6 +392,83 @@ class PaliGemma2(SamplesMixin, Model):
         parsed_answer = self._generate_and_parse(image, task, text_input=text_input)
    
         return self._extract_detections(parsed_answer, task, image)
+    
+    def _extract_segmentation(self, parsed_answer: str, image: Image.Image, label: str) -> List[fo.Detection]:
+        """Extracts segmentation information from model output and converts to FiftyOne format.
+        
+        Args:
+            parsed_answer: String containing the parsed model output
+            image: PIL Image object used to get dimensions for normalization
+            label: Class label for the segmentation
+            
+        Returns:
+            List of FiftyOne Detection objects containing the segmentation data
+        """
+        # Extract segmentation data using the imported function
+        segmentations = extract_segmentation(parsed_answer, image.width, image.height)
+        logger.info(f"Extracted {len(segmentations)} segmentations for class '{label}'")
+        
+        # Convert each segmentation to FiftyOne Detection format
+        image_segmentations = []
+        for segmentation in segmentations:
+            fo_seg = fo.Detection(
+                label=label,
+                bounding_box=segmentation['bbox'],
+                mask=segmentation.get('mask', None),  # Using .get() with default None
+            )
+            image_segmentations.append(fo_seg)
+            
+        return image_segmentations
+
+    def _predict_segmentation(self, image: Image.Image) -> Detections:
+        """Segment objects in an image with multiple class support.
+        
+        Args:
+            image: PIL image
+            
+        Returns:
+            FiftyOne Detections object containing all segmented objects
+        """
+        task = OPERATIONS["segment"]
+
+        if not self.prompt:
+            raise ValueError("No prompt provided for segment operation")
+        
+        # Handle different types of prompt inputs (list or string)
+        if isinstance(self.prompt, list):
+            # If prompt is already a list, use it directly
+            classes_to_find = self.prompt
+            logger.info(f"Using list of classes: {classes_to_find}")
+        else:
+            # If prompt is a string, try different delimiters
+            if ';' in self.prompt:
+                classes_to_find = [cls.strip() for cls in self.prompt.split(';')]
+            elif ',' in self.prompt:
+                classes_to_find = [cls.strip() for cls in self.prompt.split(',')]
+            else:
+                classes_to_find = [cls.strip() for cls in self.prompt.split()]
+            logger.info(f"Parsed classes from string: {classes_to_find}")
+        
+        # Initialize an empty list to store all segmentations across all classes
+        all_segmentations = []
+        
+        # Process each class separately
+        for cls in classes_to_find:
+            logger.info(f"Segmenting class: {cls}")
+            
+            # Prepare input for this specific class
+            text_input = f"{task} {cls}\n"
+            
+            # Get model output for this class
+            parsed_answer = self._generate_and_parse(image, task, text_input=text_input)
+            
+            # Extract and convert segmentations for this class
+            class_detections = self._extract_segmentation(parsed_answer, image, cls)
+            all_segmentations.extend(class_detections)
+        
+        # Return all segmentations combined in a single FiftyOne Detections object
+        logger.info(f"Total objects segmented across all classes: {len(all_segmentations)}")
+        return fo.Detections(detections=all_segmentations)
 
     def _predict(self, image: Image.Image, sample=None) -> Any:
         """Process a single image with model."""
@@ -412,7 +489,7 @@ class PaliGemma2(SamplesMixin, Model):
             "detection": self._predict_detection,
             "classify": self._predict_classify,
             "answer": self._predict_answer,
-            # "segmentation": self._predict_segmentation,
+            "segment": self._predict_segmentation,
         }
         
         predict_method = prediction_methods.get(self.operation)
