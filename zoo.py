@@ -384,8 +384,8 @@ class PaliGemma2(SamplesMixin, Model):
                 classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(';'))  # Clean up whitespace around semicolons
             elif ',' in self.prompt:  # If no semicolons but has commas, replace commas with semicolons
                 classes_to_find = ';'.join(cls.strip() for cls in self.prompt.split(','))
-            else: # If neither semicolons nor commas, split by spaces and join with semicolons
-                classes_to_find = ';'.join(self.prompt.split())
+            else: # If no semicolons or commas, use the prompt as-is
+                classes_to_find = self.prompt.strip()
 
         text_input = f"{task} {classes_to_find}\n"
 

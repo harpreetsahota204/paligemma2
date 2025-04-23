@@ -191,83 +191,101 @@ def extract_segmentation(model_output, image_width, image_height):
     
     Args:
         model_output: Text output from the model containing loc and seg tokens
-        image_width: Width of the input image
-        image_height: Height of the input image
+        image_width: Width of the input image in pixels
+        image_height: Height of the input image in pixels
         
     Returns:
         List of dicts, each containing:
         - 'bbox': Normalized bounding box coordinates [x, y, width, height] in range [0,1] (FiftyOne format)
-        - 'mask': Segmentation mask (if available) as a 2D binary integer array (0/1)
+        - 'mask': Segmentation mask (if available) as a 2D uint8 array (0-255)
     """
-    # Strip any leading newlines from the model output
+    # Strip leading newlines from model output
     text = model_output.lstrip("\n")
+    # Initialize list to store extracted objects
     objects = []
     
-    # Keep processing text until no more objects are found
+    # Continue processing until we've parsed all the text
     while text:
-        # Try to match the next object using regex pattern
+        # Try to match the regex pattern for segmentation tokens
         m = _SEGMENT_DETECT_RE.match(text)
+        # If no match is found, we're done
         if not m:
             break
             
-        # Extract all matched groups and get the text before the match
+        # Convert regex match groups to a list for easier manipulation
         gs = list(m.groups())
-        before = gs.pop(0)  # Text preceding the match
+        # Extract text before the match (first group)
+        before = gs.pop(0)
         
-        # Extract label if there are more than 20 groups (4 bbox coords + 16 seg indices)
-        label = gs.pop() if len(gs) > 20 else None
-        
-        # First 4 values are bounding box coordinates, normalized by 1024
-        # Original format is [y1, x1, y2, x2]
+        # Extract bounding box coordinates from the first 4 values
+        # Note: Original format is [y1, x1, y2, x2] normalized to 0-1 range by dividing by 1024
         y1, x1, y2, x2 = [int(x) / 1024 for x in gs[:4]]
         
-        # Convert coordinates to FiftyOne format: [x, y, width, height]
-        # All values remain normalized between 0 and 1
+        # Convert to FiftyOne format [x, y, width, height] but keep normalized (0-1 range)
+        # - bbox_x, bbox_y: top-left corner coordinates
+        # - bbox_width, bbox_height: dimensions of the bounding box
         bbox_x = x1
         bbox_y = y1
         bbox_width = x2 - x1
         bbox_height = y2 - y1
         
-        # Convert normalized coordinates to pixel values for mask processing
+        # Convert normalized coordinates to absolute pixel values for mask creation
+        # round() is used to get integer pixel coordinates
         y1_px, x1_px, y2_px, x2_px = map(round, (y1*image_height, x1*image_width, 
                                                 y2*image_height, x2*image_width))
         
-        # Next 16 values are segmentation indices
+        # Extract the 16 segmentation indices from groups 4-19
+        # These are special tokens that the VAE decoder uses to reconstruct the mask
         seg_indices = gs[4:20]
         
-        # Process segmentation mask if indices are present
+        # Process segmentation mask if available
         if seg_indices[0] is None:
+            # No segmentation data available for this object
             mask = None
         else:
-            # Convert indices to numpy array and reconstruct 64x64 mask
+            # Convert segmentation indices to a NumPy array of integers
             seg_indices = np.array([int(x) for x in seg_indices], dtype=np.int32)
-            m64, = _get_reconstruct_masks()(seg_indices[None])[..., 0]  # Get 64x64 mask
             
-            # Normalize mask values to 0-1 range
+            # Call the VAE decoder to reconstruct the mask from indices
+            # This returns a 64x64 pixel mask in the range [-1, 1]
+            m64, = _get_reconstruct_masks()(seg_indices[None])[..., 0]
+            
+            # Normalize values from [-1, 1] to [0, 1] range
             m64 = np.clip(np.array(m64) * 0.5 + 0.5, 0, 1)
             
-            # Convert to PIL Image for resizing
+            # Convert to a PIL Image with uint8 format (0-255 range)
             m64 = PIL.Image.fromarray((m64 * 255).astype('uint8'))
             
-            # Create empty mask of final image size
+            # Create an empty mask with the size of the original image
             mask = np.zeros([image_height, image_width])
             
-            # Only process if bounding box has valid dimensions
+            # Only place the mask if the bounding box has a valid area
             if y2_px > y1_px and x2_px > x1_px:
-                # Resize mask to bounding box dimensions and place in correct location
-                mask[y1_px:y2_px, x1_px:x2_px] = np.array(m64.resize([x2_px - x1_px, y2_px - y1_px])) / 255.0
+                # Resize the 64x64 mask to match the bounding box dimensions
+                resized_mask = m64.resize([x2_px - x1_px, y2_px - y1_px])
                 
-                # Threshold mask to binary values (0 or 1)
-                mask = (mask > 0.5).astype(np.uint8)
+                # Place the resized mask into the full-sized mask at the bounding box position
+                # Note: We divide by 255 to convert back to 0-1 range for processing
+                mask[y1_px:y2_px, x1_px:x2_px] = np.array(resized_mask) / 255.0
+                
+                # Convert to uint8 format (0-255 range) for the final output
+                # This makes the mask compatible with many image processing libraries
+                mask = (mask * 255).astype(np.uint8)
         
-        # Store bbox and mask for this object
+        # Create a dictionary with the bbox and mask for this object
+        # - 'bbox' is in FiftyOne format [x, y, width, height] with normalized values (0-1)
+        # - 'mask' is a 2D NumPy array with uint8 values (0-255)
         objects.append({
-            'bbox': [bbox_x, bbox_y, bbox_width, bbox_height],  # FiftyOne format: [x, y, width, height]
+            'bbox': [bbox_x, bbox_y, bbox_width, bbox_height],
             'mask': mask
         })
         
-        # Update remaining text by removing processed portion
+        # Get the full text of the matched content
         content = m.group()
+        
+        # Move past the processed text to continue with the next match
+        # We skip both the text before the match and the matched content itself
         text = text[len(before) + len(content):]
     
+    # Return the list of extracted objects
     return objects
