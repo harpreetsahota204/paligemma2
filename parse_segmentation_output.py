@@ -187,7 +187,7 @@ def _get_reconstruct_masks():
 
 def extract_segmentation(model_output, image_width, image_height):
     """
-    Extract bounding boxes and segmentation masks with correct image dimensions
+    Extract bounding boxes and segmentation masks with consistent dimension handling
     
     Args:
         model_output: Text output from the model containing loc and seg tokens
@@ -195,9 +195,7 @@ def extract_segmentation(model_output, image_width, image_height):
         image_height: Height of the input image in pixels (e.g., 1080)
         
     Returns:
-        List of dicts, each containing:
-        - 'bbox': Normalized bounding box coordinates [x, y, width, height] in range [0,1] (FiftyOne format)
-        - 'mask': Segmentation mask as a 2D numpy array with shape (height, width) - exactly matching input dimensions
+        List of dicts with corrected dimension ordering
     """
     # Strip leading newlines from model output
     text = model_output.lstrip("\n")
@@ -216,8 +214,13 @@ def extract_segmentation(model_output, image_width, image_height):
         gs = list(m.groups())
         # Extract text before the match
         before = gs.pop(0)
-
-        # Extract normalized bounding box coordinates (original order: y1, x1, y2, x2)
+        
+        # Extract and remove the label (if it exists)
+        label = gs.pop() if len(gs) > 20 else None
+        
+        # Important: Verify the order of bounding box coordinates
+        # Original order is stated as [y1, x1, y2, x2] - let's verify this is correct
+        # and not swapped
         y1, x1, y2, x2 = [float(int(x) / 1024) for x in gs[:4]]
         
         # Ensure values are in valid range
@@ -238,6 +241,10 @@ def extract_segmentation(model_output, image_width, image_height):
         box_width_px = int(round(bbox_width * image_width))
         box_height_px = int(round(bbox_height * image_height))
         
+        # Print these values for debugging
+        # print(f"Bbox (normalized): x={bbox_x}, y={bbox_y}, w={bbox_width}, h={bbox_height}")
+        # print(f"Bbox (pixels): x1={x1_px}, y1={y1_px}, w={box_width_px}, h={box_height_px}")
+        
         # Extract the 16 segmentation indices
         seg_indices = gs[4:20]
         
@@ -256,20 +263,24 @@ def extract_segmentation(model_output, image_width, image_height):
                 # Normalize to [0, 1] range
                 m64 = np.clip(np.array(m64) * 0.5 + 0.5, 0, 1)
                 
-                # Create a mask with correct dimensions (height, width) - CRUCIAL FOR FIFTYONE
-                # This ensures mask.shape[1], mask.shape[0] will be (image_width, image_height)
+                # Create a mask with correct dimensions (height, width) for NumPy
                 mask = np.zeros((image_height, image_width), dtype=np.uint8)
                 
+                # This is the key part - in PIL, the resize function takes (width, height)
                 # Convert base mask to a PIL image for processing
                 pil_mask = PIL.Image.fromarray((m64 * 255).astype(np.uint8))
                 
-                # Resize to match the bounding box dimensions
+                # IMPORTANT: PIL.resize takes (width, height) - this is the opposite of NumPy!
                 if box_width_px > 0 and box_height_px > 0:
-                    # Resize with high-quality resampling
+                    # Verify we're using the right order for PIL resize
+                    # For PIL: resize((width, height))
                     resized_mask = pil_mask.resize((box_width_px, box_height_px), PIL.Image.LANCZOS)
                     
-                    # Convert to numpy array
+                    # Convert to numpy array - now with shape (height, width)
                     resized_array = np.array(resized_mask)
+                    
+                    # Debug: Print the shape of the resized array
+                    # print(f"Resized mask shape: {resized_array.shape}, Expected: ({box_height_px}, {box_width_px})")
                     
                     # Calculate safe placement bounds
                     x2_px = min(x1_px + box_width_px, image_width)
@@ -281,18 +292,19 @@ def extract_segmentation(model_output, image_width, image_height):
                     
                     if place_width > 0 and place_height > 0:
                         # If resized_array dimensions exceed placement area, crop it
-                        crop_array = resized_array[:place_height, :place_width]
+                        # IMPORTANT: NumPy array access is [height, width] or [y, x]
+                        if resized_array.shape[0] > place_height or resized_array.shape[1] > place_width:
+                            crop_array = resized_array[:place_height, :place_width]
+                        else:
+                            crop_array = resized_array
                         
-                        # Place the mask (using 1 for foreground)
-                        # In numpy, indexing is [y, x] or [height, width]
+                        # Place the mask using NumPy's [y, x] indexing
+                        # Note: The crop_array should match the placement area exactly now
                         mask[y1_px:y2_px, x1_px:x2_px] = (crop_array > 127).astype(np.uint8)
                 
-                # Verify mask dimensions match expected dimensions
-                assert mask.shape == (image_height, image_width), f"Mask shape {mask.shape} does not match expected {(image_height, image_width)}"
+                # Verify mask shape for safety
+                assert mask.shape == (image_height, image_width), f"Mask shape {mask.shape} does not match image {(image_height, image_width)}"
                 
-                # You can print the mask dimensions for verification
-                # print(f"Mask dimensions: {mask.shape}, Expected: {(image_height, image_width)}")
-                # print(f"When accessed as width,height: {mask.shape[1]},{mask.shape[0]}")
             except Exception as e:
                 print(f"Error creating mask: {e}")
                 mask = None
