@@ -185,7 +185,7 @@ def _get_reconstruct_masks():
     # JIT compile for CPU
     return jax.jit(reconstruct_masks, backend='cpu')
 
-def extract_segmentation_masks(model_output, image_width, image_height):
+def extract_segmentation(model_output, image_width, image_height):
     """
     Extract high-quality segmentation masks scaled to the full image size
     
