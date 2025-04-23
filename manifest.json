@@ -18,7 +18,7 @@
             ],
             "date_added": "2025-04-03",
             "requirements": {
-                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate", "jax", "flax"],
                 "cpu": {
                     "support": true
                 },
@@ -43,7 +43,7 @@
             ],
             "date_added": "2025-04-03",
             "requirements": {
-                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate", "jax", "flax"],
                 "cpu": {
                     "support": true
                 },
@@ -68,7 +68,7 @@
             ],
             "date_added": "2025-04-03",
             "requirements": {
-                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate", "jax", "flax"],
                 "cpu": {
                     "support": true
                 },
@@ -93,7 +93,7 @@
             ],
             "date_added": "2025-04-03",
             "requirements": {
-                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate", "jax", "flax"],
                 "cpu": {
                     "support": true
                 },
@@ -118,7 +118,7 @@
             ],
             "date_added": "2025-04-03",
             "requirements": {
-                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate", "jax", "flax"],
                 "cpu": {
                     "support": true
                 },
@@ -143,7 +143,7 @@
             ],
             "date_added": "2025-04-03",
             "requirements": {
-                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate"],
+                "packages": ["huggingface-hub", "transformers>=4.50", "torch", "torchvision", "accelerate", "jax", "flax"],
                 "cpu": {
                     "support": true
                 },
