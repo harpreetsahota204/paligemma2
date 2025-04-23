@@ -187,17 +187,17 @@ def _get_reconstruct_masks():
 
 def extract_segmentation(model_output, image_width, image_height):
     """
-    Extract bounding boxes, segmentation masks from model output with fixes for FiftyOne compatibility
+    Extract bounding boxes and segmentation masks with correct image dimensions
     
     Args:
         model_output: Text output from the model containing loc and seg tokens
-        image_width: Width of the input image in pixels
-        image_height: Height of the input image in pixels
+        image_width: Width of the input image in pixels (e.g., 1920)
+        image_height: Height of the input image in pixels (e.g., 1080)
         
     Returns:
         List of dicts, each containing:
         - 'bbox': Normalized bounding box coordinates [x, y, width, height] in range [0,1] (FiftyOne format)
-        - 'mask': Binary segmentation mask as a 2D boolean array matching the exact image dimensions
+        - 'mask': Segmentation mask as a 2D numpy array with shape (height, width) - exactly matching input dimensions
     """
     # Strip leading newlines from model output
     text = model_output.lstrip("\n")
@@ -214,99 +214,97 @@ def extract_segmentation(model_output, image_width, image_height):
             
         # Convert regex match groups to a list for easier manipulation
         gs = list(m.groups())
-        # Extract text before the match (first group)
+        # Extract text before the match
         before = gs.pop(0)
-        
-        # Extract and remove the label (last group, if it exists)
-        # Labels typically follow the segmentation indices
-        label = gs.pop() if len(gs) > 20 else None
-        
-        # Extract normalized bounding box coordinates from the first 4 values
-        # Note: Original format is [y1, x1, y2, x2] normalized to 0-1 range
+
+        # Extract normalized bounding box coordinates (original order: y1, x1, y2, x2)
         y1, x1, y2, x2 = [float(int(x) / 1024) for x in gs[:4]]
         
-        # FiftyOne expects normalized coordinates in [0,1] range
-        # Ensure coordinates are properly bounded between 0 and 1
+        # Ensure values are in valid range
         x1 = max(0.0, min(1.0, x1))
         y1 = max(0.0, min(1.0, y1))
         x2 = max(0.0, min(1.0, x2))
         y2 = max(0.0, min(1.0, y2))
         
-        # Convert to FiftyOne format [x, y, width, height] but keep normalized (0-1 range)
+        # Convert to FiftyOne format [x, y, width, height] (normalized)
         bbox_x = x1
         bbox_y = y1
         bbox_width = x2 - x1
         bbox_height = y2 - y1
         
-        # Calculate absolute pixel dimensions
-        box_width_px = int(round(bbox_width * image_width))
-        box_height_px = int(round(bbox_height * image_height))
+        # Get absolute pixel coordinates for mask processing
         x1_px = int(round(x1 * image_width))
         y1_px = int(round(y1 * image_height))
-        x2_px = x1_px + box_width_px
-        y2_px = y1_px + box_height_px
+        box_width_px = int(round(bbox_width * image_width))
+        box_height_px = int(round(bbox_height * image_height))
         
-        # Extract the 16 segmentation indices from groups 4-19
+        # Extract the 16 segmentation indices
         seg_indices = gs[4:20]
         
         # Process segmentation mask if available
         if seg_indices[0] is None or box_width_px <= 0 or box_height_px <= 0:
-            # No segmentation data or invalid box dimensions
+            # No segmentation data available or invalid box
             mask = None
         else:
-            # Convert segmentation indices to a NumPy array of integers
-            seg_indices = np.array([int(x) for x in seg_indices], dtype=np.int32)
-            
-            # Call the VAE decoder to reconstruct the mask from indices
-            # This returns a 64x64 pixel mask in the range [-1, 1]
-            m64, = _get_reconstruct_masks()(seg_indices[None])[..., 0]
-            
-            # Normalize values from [-1, 1] to [0, 1] range
-            m64 = np.clip(np.array(m64) * 0.5 + 0.5, 0, 1)
-            
-            # Create an empty mask matching the exact image dimensions
-            mask = np.zeros((image_height, image_width), dtype=np.bool_)
-            
-            # Resize the 64x64 mask to exactly match the bounding box dimensions
-            # This is critical for preventing stretching/warping
-            if box_width_px > 0 and box_height_px > 0:
-                # Convert to a PIL Image for resizing
-                mask_pil = PIL.Image.fromarray((m64 * 255).astype(np.uint8))
+            try:
+                # Convert segmentation indices to a NumPy array of integers
+                seg_indices = np.array([int(x) for x in seg_indices], dtype=np.int32)
                 
-                # Resize using LANCZOS for better quality
-                resized_mask = mask_pil.resize((box_width_px, box_height_px), PIL.Image.LANCZOS)
+                # Call the VAE decoder to reconstruct the mask
+                m64, = _get_reconstruct_masks()(seg_indices[None])[..., 0]
                 
-                # Convert back to numpy array and threshold to create binary mask
-                resized_array = np.array(resized_mask) / 255.0
+                # Normalize to [0, 1] range
+                m64 = np.clip(np.array(m64) * 0.5 + 0.5, 0, 1)
                 
-                # Place the mask at the exact bounding box location
-                # Ensure we don't go out of bounds
-                x2_px = min(x2_px, image_width)
-                y2_px = min(y2_px, image_height)
+                # Create a mask with correct dimensions (height, width) - CRUCIAL FOR FIFTYONE
+                # This ensures mask.shape[1], mask.shape[0] will be (image_width, image_height)
+                mask = np.zeros((image_height, image_width), dtype=np.uint8)
                 
-                # Only place the mask if coordinates are valid
-                if x1_px < x2_px and y1_px < y2_px:
-                    # Use exact dimensions to avoid stretching
-                    actual_width = x2_px - x1_px
-                    actual_height = y2_px - y1_px
-                    if actual_width > 0 and actual_height > 0:
-                        # If needed, crop resized mask to avoid out-of-bounds
-                        crop_width = min(actual_width, resized_array.shape[1])
-                        crop_height = min(actual_height, resized_array.shape[0])
+                # Convert base mask to a PIL image for processing
+                pil_mask = PIL.Image.fromarray((m64 * 255).astype(np.uint8))
+                
+                # Resize to match the bounding box dimensions
+                if box_width_px > 0 and box_height_px > 0:
+                    # Resize with high-quality resampling
+                    resized_mask = pil_mask.resize((box_width_px, box_height_px), PIL.Image.LANCZOS)
+                    
+                    # Convert to numpy array
+                    resized_array = np.array(resized_mask)
+                    
+                    # Calculate safe placement bounds
+                    x2_px = min(x1_px + box_width_px, image_width)
+                    y2_px = min(y1_px + box_height_px, image_height)
+                    
+                    # Calculate dimensions to avoid array bounds errors
+                    place_width = x2_px - x1_px
+                    place_height = y2_px - y1_px
+                    
+                    if place_width > 0 and place_height > 0:
+                        # If resized_array dimensions exceed placement area, crop it
+                        crop_array = resized_array[:place_height, :place_width]
                         
-                        # Place the mask
-                        mask[y1_px:y1_px+crop_height, x1_px:x1_px+crop_width] = resized_array[:crop_height, :crop_width] > 0.5
+                        # Place the mask (using 1 for foreground)
+                        # In numpy, indexing is [y, x] or [height, width]
+                        mask[y1_px:y2_px, x1_px:x2_px] = (crop_array > 127).astype(np.uint8)
+                
+                # Verify mask dimensions match expected dimensions
+                assert mask.shape == (image_height, image_width), f"Mask shape {mask.shape} does not match expected {(image_height, image_width)}"
+                
+                # You can print the mask dimensions for verification
+                # print(f"Mask dimensions: {mask.shape}, Expected: {(image_height, image_width)}")
+                # print(f"When accessed as width,height: {mask.shape[1]},{mask.shape[0]}")
+            except Exception as e:
+                print(f"Error creating mask: {e}")
+                mask = None
         
-        # Add object to results
+        # Add to results
         objects.append({
-            'bbox': [bbox_x, bbox_y, bbox_width, bbox_height],  # FiftyOne normalized format
-            'mask': mask if mask is not None else None  # Full-sized boolean mask
+            'bbox': [bbox_x, bbox_y, bbox_width, bbox_height],  # FiftyOne format [x, y, width, height]
+            'mask': mask  # Complete image-sized mask with shape (height, width)
         })
         
-        # Get the full text of the matched content
+        # Move past the processed content
         content = m.group()
-        
-        # Move past the processed text to continue with the next match
         text = text[len(before) + len(content):]
     
     return objects
