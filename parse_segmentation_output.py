@@ -3,7 +3,6 @@ Segmentation Token Parser for PaliGemma-2
 
 1. Bounding boxes for detected objects
 2. Segmentation masks (when available)
-3. Object labels/categories
 
 The core functionality:
 - Parses text containing <loc####> and <seg###> tokens
@@ -23,12 +22,12 @@ Usage:
   Each object contains:
   - 'xyxy': Bounding box coordinates (x1, y1, x2, y2)
   - 'mask': Segmentation mask (numpy array, same dimensions as image)
-  - 'label': Object label/name
 """
 
 import os
 import torch
 import string
+import PIL
 import functools
 import re
 import flax.linen as nn
@@ -186,72 +185,62 @@ def _get_reconstruct_masks():
     # JIT compile for CPU
     return jax.jit(reconstruct_masks, backend='cpu')
 
-def extract_objects(model_output, image_width, image_height):
+def extract_segmentation(model_output, image_width, image_height):
     """
-    Extract bounding boxes, segmentation masks, and labels from model output.
-    
-    Parses the model's text output which contains location tokens (<loc>), optional
-    segmentation tokens (<seg>), and object labels. Converts the normalized coordinates
-    to pixel coordinates and reconstructs segmentation masks if available.
+    Extract bounding boxes, segmentation masks from model output
     
     Args:
         model_output: Text output from the model containing loc and seg tokens
-        image_width: Width of the input image in pixels
-        image_height: Height of the input image in pixels
+        image_width: Width of the input image
+        image_height: Height of the input image
         
     Returns:
         List of dicts, each containing:
-        - 'xyxy': Tuple of (x1, y1, x2, y2) coordinates for bounding box
-        - 'mask': Numpy array of shape (H,W) with mask values in [0,1], or None
-        - 'label': String containing the object label/name
+        - 'bbox': Normalized bounding box coordinates [x, y, width, height] in range [0,1]
+        - 'mask': Segmentation mask (if available)
     """
-    # Strip leading newlines and initialize results list
     text = model_output.lstrip("\n")
     objects = []
     
     while text:
-        # Try to match next object in text
         m = _SEGMENT_DETECT_RE.match(text)
         if not m:
             break
             
-        # Extract matched groups
         gs = list(m.groups())
-        before = gs.pop(0)  # Text before the match
-        label = gs.pop()    # Object label
+        before = gs.pop(0)
+        y1, x1, y2, x2 = [int(x) / 1024 for x in gs[:4]]  # Already normalized 0-1
         
-        # Convert normalized coordinates [0,1] to pixel coordinates
-        y1, x1, y2, x2 = [int(x) / 1024 for x in gs[:4]]
-        y1, x1, y2, x2 = map(round, (y1*image_height, x1*image_width, y2*image_height, x2*image_width))
+        # Convert from [x1, y1, x2, y2] to FiftyOne format [x, y, width, height]
+        x = x1
+        y = y1
+        width = x2 - x1
+        height = y2 - y1
         
-        # Extract segmentation indices if present
         seg_indices = gs[4:20]
         
-        # Process segmentation mask if indices are available
+        # Process segmentation mask if available
         if seg_indices[0] is None:
             mask = None
         else:
-            # Convert indices to mask using VAE decoder
             seg_indices = np.array([int(x) for x in seg_indices], dtype=np.int32)
             m64, = _get_reconstruct_masks()(seg_indices[None])[..., 0]
-            
-            # Normalize mask values to [0,1]
             m64 = np.clip(np.array(m64) * 0.5 + 0.5, 0, 1)
             m64 = PIL.Image.fromarray((m64 * 255).astype('uint8'))
-            
-            # Resize mask to match bounding box dimensions
             mask = np.zeros([image_height, image_width])
-            if y2 > y1 and x2 > x1:
-                mask[y1:y2, x1:x2] = np.array(m64.resize([x2 - x1, y2 - y1])) / 255.0
+            if height > 0 and width > 0:
+                # Convert normalized coordinates back to pixel values for mask processing
+                x1_px, y1_px, x2_px, y2_px = map(round, (x1*image_width, y1*image_height, 
+                                                        x2*image_width, y2*image_height))
+                mask[y1_px:y2_px, x1_px:x2_px] = np.array(m64.resize([x2_px - x1_px, y2_px - y1_px])) / 255.0
         
-        # Add extracted object to results
+        # Add object to results with FiftyOne format bbox
         objects.append({
-            'xyxy': (x1, y1, x2, y2),
-            'mask': mask,
-            'label': label
+            'bbox': [x, y, width, height],  # FiftyOne format: [x, y, width, height]
+            'mask': mask
         })
         
-        # Advance past the matched content
+        # Move past the matched content
         content = m.group()
         text = text[len(before) + len(content):]
     
