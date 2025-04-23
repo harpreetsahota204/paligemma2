@@ -187,7 +187,7 @@ def _get_reconstruct_masks():
 
 def extract_segmentation(model_output, image_width, image_height):
     """
-    Extract high-quality segmentation masks scaled to the full image size
+    Extract segmentation masks with high quality using LANCZOS scaling
     
     Args:
         model_output: Text output from the model containing seg tokens
@@ -195,12 +195,12 @@ def extract_segmentation(model_output, image_width, image_height):
         image_height: Height of the input image in pixels
         
     Returns:
-        List of 2D binary numpy arrays (one per detected object)
+        List of dicts with mask and required bbox field for compatibility
     """
     # Strip leading newlines from model output
     text = model_output.lstrip("\n")
-    # Initialize list to store extracted masks
-    masks = []
+    # Initialize list to store extracted objects
+    objects = []
     
     # Continue processing until we've parsed all the text
     while text:
@@ -215,12 +215,25 @@ def extract_segmentation(model_output, image_width, image_height):
         # Extract text before the match
         before = gs.pop(0)
         
-        # Extract the 16 segmentation indices (they start at index 4)
+        # Extract bounding box coordinates (needed for result structure compatibility)
+        # but we won't use them for mask resizing
+        y1, x1, y2, x2 = [float(int(x) / 1024) for x in gs[:4]]
+        
+        # Ensure values are in valid range
+        x1 = max(0.0, min(1.0, x1))
+        y1 = max(0.0, min(1.0, y1))
+        x2 = max(0.0, min(1.0, x2))
+        y2 = max(0.0, min(1.0, y2))
+        
+        # Create bbox in FiftyOne format [x, y, width, height] for compatibility
+        bbox = [x1, y1, x2 - x1, y2 - y1]
+        
+        # Extract segmentation indices
         seg_indices = gs[4:20]
         
         # Process segmentation mask if available
         if seg_indices[0] is None:
-            # No segmentation data available, skip this entry
+            # No segmentation data available
             mask = None
         else:
             try:
@@ -236,23 +249,25 @@ def extract_segmentation(model_output, image_width, image_height):
                 # Convert base mask to a PIL image for high-quality scaling
                 pil_mask = PIL.Image.fromarray((m64 * 255).astype(np.uint8))
                 
-                # Scale the mask to the full image size using LANCZOS for high quality
+                # Scale the mask directly to the full image size using LANCZOS
                 # PIL.resize takes (width, height)
                 scaled_mask = pil_mask.resize((image_width, image_height), PIL.Image.LANCZOS)
                 
-                # Convert to binary numpy array (0 and 1 values)
-                mask = (np.array(scaled_mask) > 127).astype(np.int32)
+                # Convert to binary numpy array
+                mask = (np.array(scaled_mask) > 127).astype(np.uint8)
                 
             except Exception as e:
                 print(f"Error creating mask: {e}")
                 mask = None
         
-        # Add mask to results if valid
-        if mask is not None:
-            masks.append(mask)
+        # Add to results with the required bbox for compatibility
+        objects.append({
+            'bbox': bbox,  # Keep bbox for compatibility
+            'mask': mask   # Full image-sized mask
+        })
         
         # Move past the processed content
         content = m.group()
         text = text[len(before) + len(content):]
     
-    return masks
+    return objects
