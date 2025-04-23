@@ -10,10 +10,11 @@ import json
 
 import fiftyone as fo
 from fiftyone import Model, SamplesMixin
-from fiftyone.core.labels import Detection, Detections, Keypoint, Keypoints, Classification, Classifications, Polyline, Polylines
+from fiftyone.core.labels import Detection, Detections, Classification, Classifications
 
 from transformers import  PaliGemmaProcessor, PaliGemmaForConditionalGeneration
 
+from .parse_segmentation_output import extract_objects
 
 # Define operation configurations
 OPERATIONS = {
