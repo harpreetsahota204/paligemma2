@@ -36,7 +36,7 @@ import jax.numpy as jnp
 import numpy as np
 
 
-_MODEL_PATH = 'vae-oid.npz'  # Path to the VAE model for mask decoding
+_MODEL_PATH = os.path.abspath('vae-oid.npz')
 
 _SEGMENT_DETECT_RE = re.compile(
     r'(.*?)' +
