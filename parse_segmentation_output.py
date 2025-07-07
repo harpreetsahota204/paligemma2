@@ -36,7 +36,7 @@ import jax.numpy as jnp
 import numpy as np
 
 
-_MODEL_PATH = os.path.abspath('vae-oid.npz')
+_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vae-oid.npz')
 
 _SEGMENT_DETECT_RE = re.compile(
     r'(.*?)' +
